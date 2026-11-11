@@ -14,11 +14,13 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('roblox:progress', listener);
     return () => ipcRenderer.removeListener('roblox:progress', listener);
   },
-  onAppUpdateStatus: (callback) => {
+  onUpdate: (callback) => {
     const listener = (_, status) => callback(status);
     ipcRenderer.on('app:update-status', listener);
     return () => ipcRenderer.removeListener('app:update-status', listener);
   },
+  updateAction: (action, version) => ipcRenderer.invoke('app:update-action', action, version),
+  getAppVersion: () => ipcRenderer.invoke('app:version'),
   getSystemStats: () => ipcRenderer.invoke('system:stats'),
   getAppUpdateStatus: () => ipcRenderer.invoke('app:update-status'),
   listBackgroundApps: () => ipcRenderer.invoke('background:list'),

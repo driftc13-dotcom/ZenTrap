@@ -350,7 +350,7 @@ body[data-launch=launching] .cube,body[data-launch=running] .cube{transform:tran
   <div class="side-foot">
     <!-- DESIGN: вернуться в окно-лаунчер -->
     <button class="btn" id="back-launcher" style="width:100%;margin-bottom:18px"><svg class="i" style="transform:rotate(90deg)"><use href="#chev"/></svg>В лаунчер</button>
-    <p>ZenTrap v1.0.6</p>
+    <p>ZenTrap v1.0.7</p>
     <div class="on-line"><span class="dot"></span>В сети</div>
   </div>
 </aside>
@@ -473,7 +473,7 @@ body[data-launch=launching] .cube,body[data-launch=running] .cube{transform:tran
     <h2 class="sh">Удаление</h2>
     <section class="card"><div class="row"><div><b>Удалить ZenTrap вместе с Roblox</b><small>Удалит лаунчер и только Roblox, установленный через ZenTrap</small></div><button class="btn sm danger" data-action="uninstall">Удалить</button></div></section>
     <h2 class="sh">О программе</h2>
-    <section class="card"><div class="row"><div><b>ZenTrap v1.0.6</b><small>Неофициальный лаунчер. Не связан с Roblox Corporation.</small></div></div></section>
+    <section class="card"><div class="row"><div><b>ZenTrap v1.0.7</b><small>Неофициальный лаунчер. Не связан с Roblox Corporation.</small></div></div></section>
   </section>
 </main>
 </div>
@@ -574,7 +574,7 @@ document.body.dataset.v='home';
  function cleanBackup(b){
   if(!b||b.schema!==1||b.product!=='ZenTrap'||!b.settings||typeof b.settings!=='object')throw new Error('Файл настроек повреждён или не поддерживается');
   var out={},s=b.settings,app=s.app||{};
-  if(s.app){out.app={};['autostart','minimizeOnPlay','tray','autoUpdate'].forEach(function(k){if(typeof app[k]==='boolean')out.app[k]=app[k]})}
+  if(s.app){out.app={};['autostart','minimizeOnPlay','tray','autoUpdate','betaChannel'].forEach(function(k){if(typeof app[k]==='boolean')out.app[k]=app[k]})}
   if(s.perf&&typeof s.perf==='object'){
    var p=s.perf,q={};['manageFlags','dpi','priority','gpuPref','fsOpt','closeBg'].forEach(function(k){if(typeof p[k]==='boolean')q[k]=p[k]});
    if(Number.isFinite(+p.fpsCap))q.fpsCap=Math.max(30,Math.min(240,Math.round(+p.fpsCap)));
@@ -770,7 +770,7 @@ document.body.dataset.v='home';
 /* ===== Связь с main-процессом: сохранение, применение к Roblox, запоминание ===== */
 (function(){
  if(!window.api||!api.store)return;
- var loaded=false,app={},APPK=['autostart','minimizeOnPlay','tray','autoUpdate'];
+ var loaded=false,app={},APPK=['autostart','minimizeOnPlay','tray','autoUpdate','betaChannel'];
  function note(r){var t=[];if(!r.ok)t.push('Не удалось применить: '+r.error);else{t.push('Записано флагов: '+r.flags.written.length+'.');
    if(r.flags.dropped.length)t.push('Пропущено (Roblox их игнорирует): '+r.flags.dropped.length+'.');(r.notes||[]).forEach(function(x){t.push(x)})}
   ZenUI.setApplyNote(t.join(' '))}
@@ -806,5 +806,6 @@ document.body.dataset.v='home';
  poll();setInterval(poll,1000);
 })();
 </script>
+<script src="update-ui.js"></script>
 </body>
 </html>

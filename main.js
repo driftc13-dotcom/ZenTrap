@@ -37,6 +37,8 @@ let gpuSampleAt = 0, gpuSampleValue = null, gpuSamplePending = null;
 let managedGameSession = false, managedGameSeen = false, managedGamePoll = null;
 let appUpdateStarted = false;
 let lastAppUpdateStatus = { state: 'idle' };
+let appUpdateDownloadStarted = false, appUpdateReady = false, appUpdateInstallStarted = false;
+let appUpdateRequestedByUser = false;
 async function withRobloxLock(task) {
   if (robloxBusy) return { ok: false, error: 'ZenTrap уже выполняет операцию с Roblox. Дождитесь её завершения.' };
   robloxBusy = true;
@@ -177,20 +179,145 @@ function startAppUpdateCheck() {
   appUpdateStarted = true;
   const [, owner, repo] = match;
   autoUpdater.setFeedURL({ provider: 'github', owner, repo });
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.allowPrerelease = store.get('app', {}).betaChannel === true;
   const publish = (status) => {
-    lastAppUpdateStatus = status;
+    lastAppUpdateStatus = { cur: app.getVersion(), ...status };
     if (!win || win.isDestroyed()) return;
-    win.webContents.send('app:update-status', status);
+    win.webContents.send('app:update-status', lastAppUpdateStatus);
   };
-  autoUpdater.on('checking-for-update', () => publish({ state: 'checking' }));
-  autoUpdater.on('update-available', (info) => publish({ state: 'available', version: info.version }));
-  autoUpdater.on('update-not-available', (info) => publish({ state: 'current', version: info.version }));
-  autoUpdater.on('download-progress', (progress) => publish({ state: 'downloading', percent: Math.round(progress.percent) }));
-  autoUpdater.on('update-downloaded', (info) => publish({ state: 'downloaded', version: info.version }));
-  autoUpdater.on('error', (error) => publish({ state: 'error', message: String(error.message || error) }));
-  autoUpdater.checkForUpdates().catch((error) => publish({ state: 'error', message: String(error.message || error) }));
+  const notesFor = (info) => Array.isArray(info.releaseNotes)
+    ? info.releaseNotes.map((item) => item && (item.note || item.version) || '').filter(Boolean).join('\n')
+    : String(info.releaseNotes || info.releaseName || '');
+  const updateDetails = (info) => ({
+    ver: info.version,
+    notes: notesFor(info),
+    size: info.files?.find((file) => /\.exe(?:$|\?)/i.test(file.url))?.size || 0,
+    date: info.releaseDate || '',
+    channel: /(?:alpha|beta|rc)/i.test(info.version) ? 'Бета' : 'Стабильная'
+  });
+  const logUpdate = (message) => {
+    try {
+      const logFile = path.join(paths.dataDir(), 'Updater.log');
+      fs.mkdirSync(path.dirname(logFile), { recursive: true });
+      fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${message}\r\n`, 'utf8');
+    } catch {}
+  };
+  autoUpdater.on('checking-for-update', () => publish({ state: 'checking', autoOpen: appUpdateRequestedByUser }));
+  autoUpdater.on('update-available', (info) => {
+    const details = updateDetails(info);
+    const skipped = store.get('app', {}).skippedUpdateVersion;
+    if (skipped === info.version) {
+      publish({ state: 'uptodate', ...details, message: `Версия ${info.version} пропущена.`, autoOpen: appUpdateRequestedByUser });
+      appUpdateRequestedByUser = false;
+      return;
+    }
+    appUpdateDownloadStarted = false;
+    appUpdateReady = false;
+    publish({ state: 'available', ...details, autoOpen: true });
+    appUpdateRequestedByUser = false;
+  });
+  autoUpdater.on('update-not-available', () => {
+    publish({ state: 'uptodate', message: 'У вас последняя версия ZenTrap.', autoOpen: appUpdateRequestedByUser });
+    appUpdateRequestedByUser = false;
+  });
+  autoUpdater.on('download-progress', (progress) => publish({
+    state: 'downloading', percent: Math.round(progress.percent), loaded: progress.transferred,
+    total: progress.total, speed: progress.bytesPerSecond, eta: progress.bytesPerSecond > 0
+      ? Math.max(0, (progress.total - progress.transferred) / progress.bytesPerSecond) : 0
+  }));
+  autoUpdater.on('update-downloaded', (info) => {
+    appUpdateReady = true;
+    publish({ state: 'verifying', ...updateDetails(info), percent: 100 });
+    setTimeout(() => {
+      if (!appUpdateReady || appUpdateInstallStarted) return;
+      publish({ state: 'installing', ...updateDetails(info), percent: 100 });
+      setTimeout(() => {
+        if (!appUpdateReady || appUpdateInstallStarted) return;
+        appUpdateInstallStarted = true;
+        publish({ state: 'restarting', ...updateDetails(info), percent: 100 });
+        setTimeout(() => autoUpdater.quitAndInstall(false, true), 450);
+      }, 650);
+    }, 550);
+  });
+  autoUpdater.on('error', (error) => {
+    const message = String(error.message || error);
+    logUpdate(message);
+    appUpdateDownloadStarted = false;
+    publish({ state: 'error', message, autoOpen: appUpdateRequestedByUser });
+    appUpdateRequestedByUser = false;
+  });
+  autoUpdater.checkForUpdates().catch((error) => {
+    const message = String(error.message || error);
+    logUpdate(message);
+    publish({ state: 'error', message });
+  });
+}
+
+async function runAppUpdateAction(action, version) {
+  const allowed = new Set(['check', 'install', 'later', 'skip', 'cancel', 'retry', 'log']);
+  if (!allowed.has(action)) return { ok: false, error: 'Неизвестное действие обновления.' };
+  if (action === 'later') return { ok: true };
+  if (action === 'log') {
+    const logFile = path.join(paths.dataDir(), 'Updater.log');
+    if (!fs.existsSync(logFile)) fs.writeFileSync(logFile, 'Лог обновлений ZenTrap пока пуст.\r\n', 'utf8');
+    const error = await shell.openPath(logFile);
+    return error ? { ok: false, error } : { ok: true };
+  }
+  if (!appUpdateStarted) startAppUpdateCheck();
+  if (!appUpdateStarted) return { ok: false, error: 'Проверка обновлений доступна в установленной версии ZenTrap.' };
+  if (action === 'skip') {
+    if (typeof version === 'string' && /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(version)) {
+      const prefs = store.get('app', {});
+      store.set('app', { ...prefs, skippedUpdateVersion: version });
+    }
+    return { ok: true };
+  }
+  if (action === 'cancel') {
+    if (appUpdateDownloadStarted && !appUpdateReady) {
+      autoUpdater.cancelDownload();
+      appUpdateDownloadStarted = false;
+      lastAppUpdateStatus = { ...lastAppUpdateStatus, state: 'available', autoOpen: true };
+      win?.webContents.send('app:update-status', { cur: app.getVersion(), ...lastAppUpdateStatus });
+    }
+    return { ok: true };
+  }
+  if (action === 'install' && appUpdateReady) {
+    if (!appUpdateInstallStarted) {
+      appUpdateInstallStarted = true;
+      lastAppUpdateStatus = { ...lastAppUpdateStatus, state: 'restarting' };
+      win?.webContents.send('app:update-status', { cur: app.getVersion(), ...lastAppUpdateStatus });
+      setTimeout(() => autoUpdater.quitAndInstall(false, true), 300);
+    }
+    return { ok: true };
+  }
+  appUpdateRequestedByUser = action === 'check' || action === 'retry';
+  if (action === 'install') {
+    if (appUpdateDownloadStarted) return { ok: true };
+    appUpdateDownloadStarted = true;
+    try {
+      autoUpdater.downloadUpdate().catch((error) => {
+        appUpdateDownloadStarted = false;
+        const message = String(error.message || error);
+        lastAppUpdateStatus = { state: 'error', message, autoOpen: true };
+        win?.webContents.send('app:update-status', { cur: app.getVersion(), ...lastAppUpdateStatus });
+      });
+      return { ok: true };
+    } catch (error) {
+      appUpdateDownloadStarted = false;
+      return { ok: false, error: String(error.message || error) };
+    }
+  }
+  autoUpdater.allowPrerelease = store.get('app', {}).betaChannel === true;
+  appUpdateDownloadStarted = false;
+  appUpdateReady = false;
+  try {
+    await autoUpdater.checkForUpdates();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error.message || error) };
+  }
 }
 
 // DESIGN: плавное изменение размера окна вокруг центра (~320 мс)
@@ -289,11 +416,14 @@ ipcMain.on('roblox:folder', () => {
 const store = createStore(paths.dataDir());
 ipcMain.handle('store:get', () => store.all());
 ipcMain.handle('app:update-status', () => lastAppUpdateStatus);
+ipcMain.handle('app:version', () => app.getVersion());
+ipcMain.handle('app:update-action', (_, action, version) => runAppUpdateAction(action, version));
 ipcMain.handle('store:set', (_, k, v) => {
   store.set(k, v);
   if (k === 'app' && v && typeof v === 'object') {
     app.setLoginItemSettings({ openAtLogin: v.autostart === true, path: app.getPath('exe') });
     setTrayEnabled(v.tray === true);
+    autoUpdater.allowPrerelease = v.betaChannel === true;
   }
   return true;
 });
@@ -302,6 +432,7 @@ ipcMain.handle('store:replace', (_, value) => {
   const prefs = value.app || {};
   app.setLoginItemSettings({ openAtLogin: prefs.autostart === true, path: app.getPath('exe') });
   setTrayEnabled(prefs.tray === true);
+  autoUpdater.allowPrerelease = prefs.betaChannel === true;
   return true;
 });
 ipcMain.handle('settings:export', async (_, backup) => {
@@ -348,6 +479,7 @@ ipcMain.handle('settings:reset', async () => {
   store.replace({});
   app.setLoginItemSettings({ openAtLogin: false, path: app.getPath('exe') });
   setTrayEnabled(false);
+  autoUpdater.allowPrerelease = false;
   return { ok: true };
 });
 ipcMain.handle('settings:apply', (_, s) => applyPerf(s, { dataDir: paths.dataDir(), robloxDir: paths.installRoot() }));
