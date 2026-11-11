@@ -4,3 +4,4 @@ dist
 .electron-builder-cache
 .npm-cache
 *.log
+.build-local/
