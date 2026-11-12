@@ -1,6 +1,6 @@
 {
   "name": "zentrap",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "ZenTrap - Roblox launcher",
   "main": "main.js",
   "scripts": {
@@ -40,7 +40,8 @@
     },
     "publish": [
       {
-        "provider": "github"
+        "provider": "github",
+        "releaseType": "release"
       }
     ],
     "npmRebuild": false
