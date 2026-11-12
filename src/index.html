@@ -574,7 +574,7 @@ document.body.dataset.v='home';
  function cleanBackup(b){
   if(!b||b.schema!==1||b.product!=='ZenTrap'||!b.settings||typeof b.settings!=='object')throw new Error('Файл настроек повреждён или не поддерживается');
   var out={},s=b.settings,app=s.app||{};
-  if(s.app){out.app={};['autostart','minimizeOnPlay','tray','autoUpdate','betaChannel'].forEach(function(k){if(typeof app[k]==='boolean')out.app[k]=app[k]})}
+  if(s.app){out.app={};['autostart','minimizeOnPlay','tray','autoUpdate'].forEach(function(k){if(typeof app[k]==='boolean')out.app[k]=app[k]})}
   if(s.perf&&typeof s.perf==='object'){
    var p=s.perf,q={};['manageFlags','dpi','priority','gpuPref','fsOpt','closeBg'].forEach(function(k){if(typeof p[k]==='boolean')q[k]=p[k]});
    if(Number.isFinite(+p.fpsCap))q.fpsCap=Math.max(30,Math.min(240,Math.round(+p.fpsCap)));
@@ -770,7 +770,7 @@ document.body.dataset.v='home';
 /* ===== Связь с main-процессом: сохранение, применение к Roblox, запоминание ===== */
 (function(){
  if(!window.api||!api.store)return;
- var loaded=false,app={},APPK=['autostart','minimizeOnPlay','tray','autoUpdate','betaChannel'];
+ var loaded=false,app={},APPK=['autostart','minimizeOnPlay','tray','autoUpdate'];
  function note(r){var t=[];if(!r.ok)t.push('Не удалось применить: '+r.error);else{t.push('Записано флагов: '+r.flags.written.length+'.');
    if(r.flags.dropped.length)t.push('Пропущено (Roblox их игнорирует): '+r.flags.dropped.length+'.');(r.notes||[]).forEach(function(x){t.push(x)})}
   ZenUI.setApplyNote(t.join(' '))}

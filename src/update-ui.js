@@ -105,8 +105,7 @@
 
   var about = document.querySelectorAll('#view-set .card'); about = about[about.length - 1];
   if (about) about.insertAdjacentHTML('beforeend',
-    '<div class="row"><div><b>Обновления ZenTrap</b><small id="upd-set-sub">Проверяются на GitHub</small></div><button class="btn sm" data-ua="check">Проверить</button></div>' +
-    '<div class="row"><div><b>Бета-версии</b><small>Получать предварительные версии с GitHub</small></div><label class="sw"><input type="checkbox" data-key="betaChannel"><i></i></label></div>');
+    '<div class="row"><div><b>Обновления ZenTrap</b><small id="upd-set-sub">Автопроверка при запуске и во время работы</small></div><button class="btn sm" data-ua="check">Проверить</button></div>');
 
   function $(i) { return document.getElementById(i); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -202,10 +201,6 @@
   });
   if (window.api && api.getAppUpdateStatus) api.getAppUpdateStatus().then(function (status) {
     if (status && status.state && status.state !== 'idle') set(status.state, status);
-  });
-  if (window.api && api.store) api.store.get().then(function (settings) {
-    var beta = document.querySelector('[data-key="betaChannel"]');
-    if (beta) beta.checked = !!(settings.app && settings.app.betaChannel);
   });
   render();
 })();

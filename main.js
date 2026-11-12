@@ -181,7 +181,7 @@ function startAppUpdateCheck() {
   autoUpdater.setFeedURL({ provider: 'github', owner, repo });
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
-  autoUpdater.allowPrerelease = store.get('app', {}).betaChannel === true;
+  autoUpdater.allowPrerelease = false;
   const publish = (status) => {
     lastAppUpdateStatus = { cur: app.getVersion(), ...status };
     if (!win || win.isDestroyed()) return;
@@ -237,7 +237,7 @@ function startAppUpdateCheck() {
         if (!appUpdateReady || appUpdateInstallStarted) return;
         appUpdateInstallStarted = true;
         publish({ state: 'restarting', ...updateDetails(info), percent: 100 });
-        setTimeout(() => autoUpdater.quitAndInstall(false, true), 450);
+        setTimeout(() => autoUpdater.quitAndInstall(true, true), 450);
       }, 650);
     }, 550);
   });
@@ -253,6 +253,16 @@ function startAppUpdateCheck() {
     logUpdate(message);
     publish({ state: 'error', message });
   });
+  const updatePoll = setInterval(() => {
+    if (!appUpdateDownloadStarted && !appUpdateReady && !appUpdateInstallStarted) {
+      autoUpdater.checkForUpdates().catch((error) => {
+        const message = String(error.message || error);
+        logUpdate(message);
+        publish({ state: 'error', message });
+      });
+    }
+  }, 6 * 60 * 60 * 1000);
+  updatePoll.unref();
 }
 
 async function runAppUpdateAction(action, version) {
@@ -288,7 +298,7 @@ async function runAppUpdateAction(action, version) {
       appUpdateInstallStarted = true;
       lastAppUpdateStatus = { ...lastAppUpdateStatus, state: 'restarting' };
       win?.webContents.send('app:update-status', { cur: app.getVersion(), ...lastAppUpdateStatus });
-      setTimeout(() => autoUpdater.quitAndInstall(false, true), 300);
+      setTimeout(() => autoUpdater.quitAndInstall(true, true), 300);
     }
     return { ok: true };
   }
@@ -309,7 +319,7 @@ async function runAppUpdateAction(action, version) {
       return { ok: false, error: String(error.message || error) };
     }
   }
-  autoUpdater.allowPrerelease = store.get('app', {}).betaChannel === true;
+  autoUpdater.allowPrerelease = false;
   appUpdateDownloadStarted = false;
   appUpdateReady = false;
   try {
@@ -423,7 +433,7 @@ ipcMain.handle('store:set', (_, k, v) => {
   if (k === 'app' && v && typeof v === 'object') {
     app.setLoginItemSettings({ openAtLogin: v.autostart === true, path: app.getPath('exe') });
     setTrayEnabled(v.tray === true);
-    autoUpdater.allowPrerelease = v.betaChannel === true;
+    autoUpdater.allowPrerelease = false;
   }
   return true;
 });
@@ -432,7 +442,7 @@ ipcMain.handle('store:replace', (_, value) => {
   const prefs = value.app || {};
   app.setLoginItemSettings({ openAtLogin: prefs.autostart === true, path: app.getPath('exe') });
   setTrayEnabled(prefs.tray === true);
-  autoUpdater.allowPrerelease = prefs.betaChannel === true;
+  autoUpdater.allowPrerelease = false;
   return true;
 });
 ipcMain.handle('settings:export', async (_, backup) => {
