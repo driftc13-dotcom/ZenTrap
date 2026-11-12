@@ -363,6 +363,13 @@ ipcMain.on('win:mode', (_, mode) => {
 ipcMain.on('win:min', () => win.minimize());
 ipcMain.on('win:max', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
 ipcMain.on('win:close', () => win.close());
+function ensureRobloxLogDirectory() {
+  // Roblox writes its bootstrap log to %LOCALAPPDATA%\\Roblox\\logs even when
+  // the managed client itself lives in ZenTrap's selected install folder.
+  const logDir = path.join(paths.localAppData(), 'Roblox', 'logs');
+  fs.mkdirSync(logDir, { recursive: true });
+  return logDir;
+}
 // Устанавливаем/обновляем собственную копию, применяем профиль и запускаем её напрямую.
 ipcMain.handle('roblox:launch', async (_, settings) => withRobloxLock(async () => {
   const root = paths.installRoot();
@@ -376,13 +383,13 @@ ipcMain.handle('roblox:launch', async (_, settings) => withRobloxLock(async () =
     const result = await applyPerf(settings || {}, { dataDir: paths.dataDir(), robloxDir: root, versionDir: installed.versionDir });
     if (!result.ok) return result;
     const exe = path.join(installed.versionDir, 'RobloxPlayerBeta.exe');
+    ensureRobloxLogDirectory();
     activeManagedVersionDir = installed.versionDir;
     const child = spawn(exe, ['roblox-player:1+launchmode:app+robloxLocale:en_us+gameLocale:en_us+LaunchExp:InApp'], {
       cwd: installed.versionDir, detached: true, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: false
     });
-    let launchOutput = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (data) => { launchOutput = (launchOutput + data).slice(-2000); });
+    let launchOutput = Buffer.alloc(0);
+    child.stderr.on('data', (data) => { launchOutput = Buffer.concat([launchOutput, Buffer.from(data)]).subarray(-2000); });
     const outcome = new Promise((resolve) => {
       child.once('close', (code, signal) => resolve({ exited: true, code, signal }));
       child.once('error', (error) => resolve({ exited: true, error }));
@@ -394,7 +401,8 @@ ipcMain.handle('roblox:launch', async (_, settings) => withRobloxLock(async () =
     if (!earlyExit) child.stderr.destroy();
     if (earlyExit && !(await isRobloxRunning())) {
       const code = earlyExit.error ? earlyExit.error.message : `код ${earlyExit.code}${earlyExit.signal ? `, сигнал ${earlyExit.signal}` : ''}`;
-      const details = launchOutput.trim();
+      let details = launchOutput.toString('utf8').trim();
+      if (details.includes('\uFFFD')) details = new TextDecoder('windows-1251').decode(launchOutput).trim();
       throw new Error(`Roblox сразу закрылся (${code}).${details ? ` Сообщение клиента: ${details}` : ''} Нажми «Переустановить Roblox» и попробуй ещё раз.`);
     }
     const launchNotes = [...(result.notes || [])];
