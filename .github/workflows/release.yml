@@ -35,6 +35,24 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: 1
       - name: Run tests
         run: npm test
+      - name: Create release before uploading assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $body = @{
+            tag_name = $env:GITHUB_REF_NAME
+            name = $env:GITHUB_REF_NAME
+            draft = $false
+            prerelease = $false
+            generate_release_notes = $true
+          } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases" -Headers $headers -ContentType 'application/json' -Body $body | Out-Null
       - name: Build and publish installer and updater metadata
         run: npm run dist -- --publish always
         env:
