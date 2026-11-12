@@ -149,7 +149,7 @@
       $('u-cancel').style.display = S === 'downloading' ? '' : 'none'; $('u-warn').textContent = S === 'restarting' ? 'ZenTrap перезапустится сам' : 'Не закрывайте ZenTrap';
     }
     if (view === 'ok') $('u-oktext').textContent = D.message || ('У вас последняя версия ZenTrap' + (D.cur ? ' ' + D.cur : '') + '.');
-    if (view === 'error') $('u-err').textContent = D.error || 'Неизвестная ошибка';
+    if (view === 'error') $('u-err').textContent = D.error || D.message || 'Неизвестная ошибка';
     var avail = S === 'available' && !dismissed && !root.classList.contains('show');
     pill.classList.toggle('show', avail); badge.classList.toggle('show', S === 'available'); $('p-ver').textContent = $('b-ver').textContent = D.ver;
     var sub = $('upd-set-sub'); if (sub) sub.textContent = S === 'available' ? 'Доступна версия ' + D.ver : S === 'checking' ? 'Проверяем…' : S === 'error' ? 'Не удалось проверить' : 'Версия ' + (D.cur || '—') + ' · актуальная';

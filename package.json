@@ -1,6 +1,6 @@
 {
   "name": "zentrap",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "ZenTrap - Roblox launcher",
   "main": "main.js",
   "scripts": {
