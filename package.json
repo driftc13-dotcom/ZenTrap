@@ -1,6 +1,6 @@
 {
   "name": "zentrap",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "ZenTrap - Roblox launcher",
   "main": "main.js",
   "scripts": {
@@ -29,6 +29,7 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
+      "include": "build/installer.nsh",
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
