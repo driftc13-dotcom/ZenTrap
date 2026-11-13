@@ -2,6 +2,7 @@ const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('fs'), os = require('os'), path = require('path');
 const flags = require('../core/flags'), rs = require('../core/robloxSettings'), { createStore } = require('../core/store');
 const { applyPerf } = require('../core/apply'), paths = require('../core/paths');
+const { installRoblox } = require('../core/robloxInstaller');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'zt-'));
 const base = { manageFlags: true, fpsCap: 144, frm: 8, msaa: '2', textures: '2', dpi: true, render: 'd3d11', altEnter: false, grass: 'off' };
 const SAMPLE = '<roblox><Item class="UserGameSettings" referent="RBX1">\n\t\t<Properties>\n\t\t\t<bool name="Fullscreen">false</bool>\n\t\t\t<int name="FramerateCap">-1</int>\n\t\t</Properties></Item></roblox>';
@@ -78,4 +79,26 @@ test('latestVersionDir выбирает самую свежую версию', (
   const root = tmp();
   for (const [n, t] of [['version-old', 1000], ['version-new', 2000]]) { const d = path.join(root, 'Versions', n); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'RobloxPlayerBeta.exe'), ''); fs.utimesSync(d, t, t); }
   assert.ok(paths.latestVersionDir([root]).endsWith('version-new'));
+});
+test('installRoblox reuses the current client without redownloading packages', async (t) => {
+  if (process.platform !== 'win32') return t.skip('Windows-only Roblox installer behavior');
+  const root = tmp(), version = 'version-test123', versionDir = path.join(root, 'Versions', version);
+  fs.mkdirSync(versionDir, { recursive: true });
+  fs.writeFileSync(path.join(versionDir, 'RobloxPlayerBeta.exe'), 'client');
+  fs.writeFileSync(path.join(root, 'ZenTrap.Install.json'), JSON.stringify({ schema: 1, owner: 'ZenTrap', clientVersion: version, managedVersions: [version] }));
+  const originalFetch = global.fetch, urls = [];
+  global.fetch = async (url) => {
+    urls.push(String(url));
+    return { ok: true, json: async () => ({ clientVersionUpload: version }) };
+  };
+  try {
+    const offlinePreference = await installRoblox(root, { checkForUpdates: false });
+    assert.equal(offlinePreference.updateSkipped, true);
+    assert.deepEqual(urls, []);
+    const current = await installRoblox(root, { checkForUpdates: true });
+    assert.equal(current.installed, false);
+    assert.equal(current.versionDir, versionDir);
+    assert.deepEqual(urls, ['https://clientsettingscdn.roblox.com/v2/client-version/WindowsPlayer']);
+    assert.ok(fs.existsSync(path.join(versionDir, 'AppSettings.xml')));
+  } finally { global.fetch = originalFetch; }
 });

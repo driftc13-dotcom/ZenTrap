@@ -619,7 +619,9 @@ function readCpuTimes() {
 
 async function readGpuLoad() {
   if (process.platform !== 'win32') return null;
-  if (Date.now() - gpuSampleAt < 2500) return gpuSampleValue;
+  const optimized = store.get('app', {}).optimizeZenTrap === true;
+  const sampleInterval = optimized ? 60000 : 15000;
+  if (Date.now() - gpuSampleAt < sampleInterval) return gpuSampleValue;
   if (gpuSamplePending) return gpuSamplePending;
   const script = "$ErrorActionPreference='Stop';$x=@(Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop|Where-Object{$_.Name -match 'engtype_3D'});if(!$x.Count){[Console]::Write('NA')}else{[Console]::Write(($x|Measure-Object -Property UtilizationPercentage -Maximum).Maximum)}";
   gpuSamplePending = execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 4000, encoding: 'utf8' })
